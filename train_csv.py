@@ -1,42 +1,60 @@
 import numpy as np
-import pandas as pd
-import tensorflow as tf
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+from tensorflow.keras.models import Sequential, save_model
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense, Dropout
+from tensorflow.keras.utils import to_categorical
 
-# 데이터셋 불러오기
-dataset = pd.read_csv('data\gesture_dataset.csv', header=None)
+# Load the dataset
+data = np.loadtxt('data/gesture_dataset.csv', delimiter=',')
+X = data[:, :-1]  # Features (angles)
+y = data[:, -1]   # Labels
 
-# 입력 데이터와 타깃 데이터로 분리
-X = dataset.iloc[:, :-1].values
-y = dataset.iloc[:, -1].values
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+# Reshape the data for CNN input (add a channel dimension)
+X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
+X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
 
+# Convert labels to one-hot encoding
+y_train = to_categorical(y_train)
+y_test = to_categorical(y_test)
 
-# # 데이터 스케일링
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+# Build the 1D CNN model
+model = Sequential()
+model.add(Conv1D(32, kernel_size=3, activation='relu', input_shape=(X_train.shape[1], 1)))
+model.add(Conv1D(64, kernel_size=3, activation='relu'))
+model.add(MaxPooling1D(pool_size=2))
+model.add(Flatten())
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(2, activation='softmax'))  # Assuming 2 classes (0 and 1)
 
-# 훈련 세트와 테스트 세트로 분할
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+# Compile the model
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-# 모델 구축
-model = Sequential([
-    Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
-    Dense(64, activation='relu'),
-    Dense(1, activation='sigmoid')
-])
+# Train the model
+history = model.fit(X_train, y_train, epochs=300, batch_size=32, validation_data=(X_test, y_test))
 
-# 모델 컴파일
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+# Save the model
+model.save('gesture_recognition_model.h5')
 
-# 모델 훈련
-model.fit(X_train, y_train, epochs=2500, batch_size=32, validation_data=(X_test, y_test))
+# Evaluate the model
+loss, accuracy = model.evaluate(X_test, y_test)
+print(f'Test Loss: {loss}, Test Accuracy: {accuracy}')
 
-# 모델 저장
-model.save('gesture_detection_model.h5')
+# Plot training history (loss and accuracy)
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
 
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.show()
